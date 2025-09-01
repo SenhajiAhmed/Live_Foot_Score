@@ -338,25 +338,57 @@ class FootballApp:
     def process_results(self):
         """Process and display the scraped results"""
         try:
-            with open('data/events.json', 'r') as f:
-                data = json.load(f)
-                
-            # Clear the content area
+            # Clear previous results
             for widget in self.scrollable_frame.winfo_children():
                 widget.destroy()
+            
+            # Load the data from the JSON file
+            try:
+                with open('data/events.json', 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except FileNotFoundError:
+                self.show_empty_state("No match data available")
+                return
                 
             if 'events' in data and data['events']:
-                # Get only the first 5 matches
-                matches_to_show = data['events'][:5]
-                for event in matches_to_show:
-                    self.create_match_card(event)
+                # Group matches by tournament and status
+                matches_by_tournament = {}
+                
+                for event in data['events']:
+                    tournament_name = event['tournament']['name']
+                    status_type = event['status']['type']
+                    round_info = event.get('roundInfo', {})
+                    round_name = round_info.get('round', 'Unknown Round')
+                    
+                    # Create a unique key for each tournament and round
+                    key = f"{tournament_name} - {round_name}"
+                    
+                    if key not in matches_by_tournament:
+                        matches_by_tournament[key] = {
+                            'tournament': tournament_name,
+                            'round': round_name,
+                            'matches': []
+                        }
+                    
+                    matches_by_tournament[key]['matches'].append(event)
+                
+                # Display only the first 3 tournaments
+                displayed_tournaments = 0
+                total_matches = 0
+                
+                for tournament_info in matches_by_tournament.values():
+                    if displayed_tournaments >= 3:
+                        break
+                    self.display_tournament_matches(tournament_info)
+                    displayed_tournaments += 1
+                    total_matches += len(tournament_info['matches'])
                 self.status_label.config(
-                    text=f"Showing {len(matches_to_show)} of {len(data['events'])} matches",
+                    text=f"Showing {total_matches} matches",
                     fg=self.colors['success']
                 )
-                self.status_var.set(f"Successfully loaded {len(matches_to_show)} matches")
+                self.status_var.set(f"Successfully loaded {total_matches} matches")
             else:
-                self.show_empty_state("No matches available for the selected date")
+                self.show_empty_state("No matches available")
                 self.status_label.config(
                     text="No matches found",
                     fg=self.colors['warning']
@@ -368,51 +400,95 @@ class FootballApp:
         finally:
             self.cleanup()
     
-    def create_match_card(self, event):
-        """Create a match card for display"""
-        card = tk.Frame(
-            self.scrollable_frame,
+    def display_tournament_matches(self, tournament_info):
+        """Display matches for a specific tournament in a horizontal layout"""
+        # Create tournament header
+        header_frame = tk.Frame(self.scrollable_frame, bg='white')
+        header_frame.pack(fill=tk.X, pady=(15, 5), padx=10)
+        
+        tk.Label(
+            header_frame,
+            text=f"{tournament_info['tournament']} - {tournament_info['round']}",
+            font=('Segoe UI', 12, 'bold'),
+            fg=self.colors['primary'],
             bg='white',
+            anchor='w'
+        ).pack(fill=tk.X)
+        
+        # Create a frame for the matches with horizontal scrolling
+        matches_container = tk.Frame(self.scrollable_frame, bg='white')
+        matches_container.pack(fill=tk.X, padx=10, pady=(0, 15))
+        
+        # Create a canvas for horizontal scrolling
+        canvas = tk.Canvas(matches_container, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(matches_container, orient=tk.HORIZONTAL, command=canvas.xview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(xscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="top", fill="x", expand=True)
+        scrollbar.pack(side="bottom", fill="x")
+        
+        # Group matches by status
+        matches_by_status = {}
+        for match in tournament_info['matches']:
+            status = match['status']['type']
+            if status not in matches_by_status:
+                matches_by_status[status] = []
+            matches_by_status[status].append(match)
+        
+        # Display matches by status
+        for status, matches in matches_by_status.items():
+            status_frame = tk.Frame(scrollable_frame, bg='white')
+            status_frame.pack(side=tk.LEFT, padx=5, fill=tk.Y)
+            
+            # Status header
+            status_text = status.capitalize()
+            if status == 'inprogress':
+                status_text = 'LIVE '
+            elif status == 'finished':
+                status_text = 'FT '
+                
+            tk.Label(
+                status_frame,
+                text=status_text,
+                font=('Segoe UI', 9, 'bold'),
+                fg=self.colors['primary'],
+                bg='white',
+                bd=1,
+                relief=tk.SOLID,
+                padx=5,
+                pady=2
+            ).pack(fill=tk.X, pady=(0, 5))
+            
+            # Add matches for this status
+            for match in matches:
+                self.create_match_card_horizontal(match, status_frame)
+    
+    def create_match_card_horizontal(self, event, parent_frame):
+        """Create a compact match card for horizontal display"""
+        card = tk.Frame(
+            parent_frame,
+            bg='#f9f9f9',
             bd=1,
             relief=tk.SOLID,
-            padx=15,
-            pady=10,
+            padx=10,
+            pady=8,
             highlightbackground=self.colors['border'],
             highlightthickness=1
         )
-        card.pack(fill=tk.X, pady=5)
+        card.pack(side=tk.LEFT, fill=tk.Y, padx=3, pady=2)
         
         # Match status
         status_type = event['status']['type']
         is_live = status_type == 'inprogress'
         is_finished = status_type == 'finished'
-        
-        if is_finished:
-            status_text = "FT"
-            status_color = self.colors['text_secondary']
-        elif is_live:
-            status_text = f"LIVE {event.get('time', {}).get('minute', '')}'"
-            status_color = self.colors['danger']
-        else:
-            try:
-                match_time = datetime.fromtimestamp(event['startTimestamp']).strftime('%H:%M')
-                status_text = match_time
-                status_color = self.colors['text_secondary']
-            except:
-                status_text = event['status']['description']
-                status_color = self.colors['text_secondary']
-        
-        # Status label
-        status_frame = tk.Frame(card, bg='white')
-        status_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        tk.Label(
-            status_frame,
-            text=status_text,
-            font=('Segoe UI', 10, 'bold'),
-            fg=status_color,
-            bg='white'
-        ).pack(anchor='w')
         
         # Teams and scores
         home_team = event["homeTeam"]["name"]
@@ -421,62 +497,86 @@ class FootballApp:
         away_score = event["awayScore"].get("current", "-")
         
         # Home team
-        home_frame = tk.Frame(card, bg='white')
-        home_frame.pack(fill=tk.X, pady=2)
+        home_frame = tk.Frame(card, bg='#f9f9f9')
+        home_frame.pack(fill=tk.X, pady=1)
         
         tk.Label(
             home_frame,
-            text=home_team,
-            font=('Segoe UI', 12),
+            text=home_team[:15] + ('...' if len(home_team) > 15 else ''),
+            font=('Segoe UI', 9),
             fg=self.colors['text_primary'],
-            bg='white',
-            anchor='w'
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+            bg='#f9f9f9',
+            anchor='w',
+            width=15
+        ).pack(side=tk.LEFT)
         
-        tk.Label(
-            home_frame,
-            text=str(home_score),
-            font=('Segoe UI', 12, 'bold'),
-            fg=self.colors['dark'],
-            bg='white',
-            width=3
-        ).pack(side=tk.RIGHT)
+        # Status indicator
+        status_frame = tk.Frame(card, bg='#f9f9f9')
+        status_frame.pack(fill=tk.X, pady=2)
+        
+        # Score or time
+        if is_finished:
+            score_text = f"{home_score} - {away_score}"
+            status_bg = '#e8f5e9'  # Light green for finished matches
+            status_fg = '#2e7d32'
+        elif is_live:
+            minute = event.get('time', {}).get('minute', '')
+            score_text = f"{home_score} - {away_score} {minute}'" if minute else f"{home_score} - {away_score}"
+            status_bg = '#ffebee'  # Light red for live matches
+            status_fg = '#c62828'
+        else:
+            try:
+                match_time = datetime.fromtimestamp(event['startTimestamp']).strftime('%H:%M')
+                score_text = match_time
+            except:
+                score_text = event['status']['description']
+            status_bg = '#e3f2fd'  # Light blue for upcoming matches
+            status_fg = '#1565c0'
+        
+        # Score/Time display
+        score_label = tk.Label(
+            status_frame,
+            text=score_text,
+            font=('Segoe UI', 9, 'bold'),
+            fg=status_fg,
+            bg=status_bg,
+            bd=1,
+            relief=tk.SOLID,
+            padx=5,
+            pady=1
+        )
+        score_label.pack()
         
         # Away team
-        away_frame = tk.Frame(card, bg='white')
-        away_frame.pack(fill=tk.X, pady=2)
+        away_frame = tk.Frame(card, bg='#f9f9f9')
+        away_frame.pack(fill=tk.X, pady=1)
         
         tk.Label(
             away_frame,
-            text=away_team,
-            font=('Segoe UI', 12),
+            text=away_team[:15] + ('...' if len(away_team) > 15 else ''),
+            font=('Segoe UI', 9),
             fg=self.colors['text_primary'],
-            bg='white',
-            anchor='w'
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+            bg='#f9f9f9',
+            anchor='w',
+            width=15
+        ).pack(side=tk.LEFT)
         
-        tk.Label(
-            away_frame,
-            text=str(away_score),
-            font=('Segoe UI', 12, 'bold'),
-            fg=self.colors['dark'],
-            bg='white',
-            width=3
-        ).pack(side=tk.RIGHT)
-        
-        # Competition info
-        if 'tournament' in event and 'name' in event['tournament']:
-            comp_frame = tk.Frame(card, bg='white')
-            comp_frame.pack(fill=tk.X, pady=(10, 0))
-            
-            tk.Label(
-                comp_frame,
-                text=event['tournament']['name'],
-                font=('Segoe UI', 9),
-                fg=self.colors['text_secondary'],
-                bg='white',
-                anchor='w'
-            ).pack(fill=tk.X)
+        # Add winner indicator for finished matches
+        if is_finished and 'winnerCode' in event['status']:
+            winner_code = event['status']['winnerCode']
+            if winner_code == 1:  # Home win
+                home_frame.config(bg='#e8f5e9')
+                home_frame.pack_configure(padx=2, pady=1)
+                home_frame.pack_propagate(False)
+                home_frame.config(width=120, height=20)
+            elif winner_code == 2:  # Away win
+                away_frame.config(bg='#e8f5e9')
+                away_frame.pack_configure(padx=2, pady=1)
+                away_frame.pack_propagate(False)
+                away_frame.config(width=120, height=20)
+            elif winner_code == 0:  # Draw
+                status_frame.config(bg='#fff8e1')
+                score_label.config(bg='#fff8e1', fg='#f57f17')
     
     def check_scraper_status(self):
         """Check if the scraper thread is still running"""
