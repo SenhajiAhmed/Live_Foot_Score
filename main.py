@@ -12,6 +12,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from core.design_system import DesignSystem
+from core.theme_manager import ThemeManager
 from ui.header import Header
 from ui.sidebar import Sidebar
 from ui.content import ContentArea
@@ -31,6 +32,9 @@ class FootballApp:
         
         # Initialize design system
         self.design = DesignSystem()
+        
+        # Initialize theme manager
+        self.theme_manager = ThemeManager(self.design)
         
         # Initialize data processor
         self.data_processor = DataProcessor()
@@ -75,7 +79,7 @@ class FootballApp:
             'stop_fetching': self.stop_fetching,
             'show_live_matches': self.show_live_matches,
             'show_fixtures': self.show_fixtures,
-            'show_favorites': self.show_favorites,
+            'show_finished': self.show_finished,
             'show_settings': self.show_settings
         }
         self.sidebar = Sidebar(self.content_frame, self.design, sidebar_callbacks)
@@ -83,8 +87,22 @@ class FootballApp:
         # Create content area
         self.content = ContentArea(self.content_frame, self.design)
         
+        # Set the match display and organizer components in content area
+        self.content.set_match_display(self.match_display)
+        self.content.set_match_organizer(MatchOrganizer)
+        
+        # Set theme callback for content area
+        self.content.set_theme_callback(self.switch_theme)
+        
         # Create status bar
         self.status_bar = StatusBar(self.main_container, self.design)
+        
+        # Register components with theme manager
+        self.theme_manager.register_component(self.header)
+        self.theme_manager.register_component(self.sidebar)
+        self.theme_manager.register_component(self.content)
+        self.theme_manager.register_component(self.status_bar)
+        self.theme_manager.register_component(self.match_display)
     
     def fetch_matches(self):
         """Start fetching matches with modern UI updates"""
@@ -116,33 +134,28 @@ class FootballApp:
     def process_results(self, data):
         """Process and display results with modern UI"""
         try:
-            # Clear previous results
-            self.content.clear_content()
-            
-            # Organize matches by tournament
+            # Get statistics for status updates
             matches_by_tournament = MatchOrganizer.organize_matches_by_tournament(data)
+            stats = MatchOrganizer.get_match_statistics(matches_by_tournament)
             
-            if matches_by_tournament:
-                # Display all tournaments with modern styling
-                total_matches = self.match_display.display_tournaments(
-                    self.content.scrollable_frame, 
-                    matches_by_tournament
-                )
-                
-                # Get statistics
-                stats = MatchOrganizer.get_match_statistics(matches_by_tournament)
-                
-                # Update status
-                self.sidebar.update_status(f"Showing {total_matches} matches", self.design.colors['success'], "●")
-                self.status_bar.update_status(f"Successfully loaded {total_matches} matches")
-                self.status_bar.update_match_count(total_matches)
-                
-                print(f"Displayed {stats['total_tournaments']} tournaments with {total_matches} matches")
-                print(f"Live: {stats['live_matches']}, Finished: {stats['finished_matches']}, Upcoming: {stats['upcoming_matches']}")
-                
+            # Update status with overall statistics
+            self.sidebar.update_status(f"Loaded {stats['total_matches']} matches", self.design.colors['success'], "●")
+            self.status_bar.update_status(f"Successfully loaded {stats['total_matches']} matches")
+            self.status_bar.update_match_count(stats['total_matches'])
+            
+            print(f"Loaded {stats['total_tournaments']} tournaments with {stats['total_matches']} matches")
+            print(f"Live: {stats['live_matches']}, Finished: {stats['finished_matches']}, Upcoming: {stats['upcoming_matches']}")
+            
+            # Display content based on current view
+            if self.content.current_view == "live_matches":
+                self.content.show_live_matches(data)
+            elif self.content.current_view == "fixtures":
+                self.content.show_fixtures(data)
+            elif self.content.current_view == "finished":
+                self.content.show_finished(data)
             else:
-                self.content.show_modern_empty_state("No matches available")
-                self.sidebar.update_status("No matches found", self.design.colors['warning'], "●")
+                # Default to live matches view
+                self.content.show_live_matches(data)
                 
         except Exception as e:
             self.show_error(f"Error processing results: {str(e)}")
@@ -170,31 +183,54 @@ class FootballApp:
     def show_live_matches(self):
         """Show live matches"""
         self.sidebar.update_nav_selection(0)
-        self.content.update_content_title("Live Matches", "Real-time football scores and updates")
         self.status_bar.update_status("Viewing live matches")
         
-        # If we have data, process and display it
+        # Get current data and show live matches
         data = self.data_processor.get_data()
-        if data:
-            self.process_results(data)
+        self.content.show_live_matches(data)
     
     def show_fixtures(self):
         """Show upcoming fixtures"""
         self.sidebar.update_nav_selection(1)
-        self.content.update_content_title("Upcoming Fixtures", "Scheduled matches and kick-off times")
         self.status_bar.update_status("Viewing upcoming fixtures")
+        
+        # Get current data and show fixtures
+        data = self.data_processor.get_data()
+        self.content.show_fixtures(data)
     
-    def show_favorites(self):
-        """Show favorite matches"""
+    def show_finished(self):
+        """Show finished matches"""
         self.sidebar.update_nav_selection(2)
-        self.content.update_content_title("Favorite Matches", "Your followed teams and matches")
-        self.status_bar.update_status("Viewing favorites")
+        self.status_bar.update_status("Viewing finished matches")
+        
+        # Get current data and show finished matches
+        data = self.data_processor.get_data()
+        self.content.show_finished(data)
     
     def show_settings(self):
         """Show settings"""
         self.sidebar.update_nav_selection(3)
-        self.content.update_content_title("Settings", "Customize your experience")
         self.status_bar.update_status("Viewing settings")
+        
+        # Show settings view
+        self.content.show_settings()
+    
+    def switch_theme(self, theme):
+        """Switch application theme"""
+        if self.theme_manager.switch_theme(theme):
+            # Update root window background
+            self.root.configure(bg=self.design.colors['bg_primary'])
+            
+            # Update main container background
+            self.main_container.configure(bg=self.design.colors['bg_primary'])
+            
+            # Update content frame background
+            self.content_frame.configure(bg=self.design.colors['bg_secondary'])
+            
+            print(f"Theme switched to: {theme}")
+            self.status_bar.update_status(f"Switched to {theme} theme")
+        else:
+            print(f"Failed to switch to theme: {theme}")
 
 
 def main():

@@ -15,7 +15,23 @@ class Sidebar:
         self.callbacks = callbacks
         self.nav_buttons = []
         
+        # Validate callbacks
+        self.validate_callbacks()
+        
         self.create_sidebar()
+    
+    def validate_callbacks(self):
+        """Validate that all required callbacks are present"""
+        required_callbacks = [
+            'fetch_matches', 'stop_fetching', 'show_live_matches', 
+            'show_fixtures', 'show_finished', 'show_settings'
+        ]
+        
+        for callback_name in required_callbacks:
+            if callback_name not in self.callbacks or self.callbacks[callback_name] is None:
+                print(f"Warning: Missing callback '{callback_name}'")
+                # Create a dummy callback that shows a message
+                self.callbacks[callback_name] = lambda: print(f"Callback '{callback_name}' not implemented")
     
     def create_sidebar(self):
         """Create modern sidebar with card design"""
@@ -96,10 +112,10 @@ class Sidebar:
         
         # Navigation items with modern styling
         nav_items = [
-            ("📊", "Live Matches", self.callbacks.get('show_live_matches'), True),
-            ("📅", "Fixtures", self.callbacks.get('show_fixtures'), False),
-            ("⭐", "Favorites", self.callbacks.get('show_favorites'), False),
-            ("⚙️", "Settings", self.callbacks.get('show_settings'), False)
+            ("📊", "Live Matches", self.callbacks['show_live_matches'], True),
+            ("📅", "Fixtures", self.callbacks['show_fixtures'], False),
+            ("🏁", "Finished", self.callbacks['show_finished'], False),
+            ("⚙️", "Settings", self.callbacks['show_settings'], False)
         ]
         
         self.nav_buttons = []
@@ -156,7 +172,7 @@ class Sidebar:
             relief=tk.FLAT,
             padx=self.design.spacing['lg'],
             pady=self.design.spacing['md'],
-            command=self.callbacks.get('fetch_matches'),
+            command=self.callbacks['fetch_matches'],
             cursor='hand2'
         )
         self.fetch_btn.pack(fill=tk.X, pady=(0, self.design.spacing['sm']))
@@ -172,7 +188,7 @@ class Sidebar:
             relief=tk.SOLID,
             padx=self.design.spacing['lg'],
             pady=self.design.spacing['md'],
-            command=self.callbacks.get('stop_fetching'),
+            command=self.callbacks['stop_fetching'],
             state=tk.DISABLED,
             cursor='hand2'
         )
@@ -289,3 +305,34 @@ class Sidebar:
         else:
             self.fetch_btn.config(state=tk.DISABLED, bg=self.design.colors['text_muted'])
             self.stop_btn.config(state=tk.NORMAL, bg=self.design.colors['danger'], fg=self.design.colors['text_white'])
+    
+    def update_theme(self, design_system):
+        """Update component colors when theme changes"""
+        self.design = design_system
+        
+        # Update sidebar container
+        self.parent.configure(bg=self.design.colors['bg_secondary'])
+        
+        # Update sidebar frame
+        self.sidebar.configure(bg=self.design.colors['bg_sidebar'])
+        
+        # Update navigation buttons
+        for btn, frame, is_active in self.nav_buttons:
+            if is_active:
+                btn.config(bg=self.design.colors['active'], fg=self.design.colors['primary'])
+                frame.config(bg=self.design.colors['active'])
+            else:
+                btn.config(bg=self.design.colors['bg_sidebar'], fg=self.design.colors['text_primary'])
+                frame.config(bg=self.design.colors['bg_sidebar'])
+        
+        # Update action buttons
+        if hasattr(self, 'fetch_btn'):
+            self.fetch_btn.config(bg=self.design.colors['success'])
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.config(bg=self.design.colors['bg_card'], fg=self.design.colors['danger'])
+        
+        # Update status section
+        if hasattr(self, 'status_label'):
+            self.status_label.config(fg=self.design.colors['text_secondary'], bg=self.design.colors['bg_primary'])
+        if hasattr(self, 'status_dot'):
+            self.status_dot.config(bg=self.design.colors['bg_primary'])

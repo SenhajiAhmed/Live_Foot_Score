@@ -104,10 +104,10 @@ class Sidebar:
         
         # Navigation items with modern styling
         nav_items = [
-            ("📊", "Live Matches", self.callbacks['show_live_matches'], True),
-            ("📅", "Fixtures", self.callbacks['show_fixtures'], False),
-            ("⭐", "Favorites", self.callbacks['show_favorites'], False),
-            ("⚙️", "Settings", self.callbacks['show_settings'], False)
+            ("📊", "Live Matches", self.callbacks.get('show_live_matches', lambda: print("show_live_matches not implemented")), True),
+            ("📅", "Fixtures", self.callbacks.get('show_fixtures', lambda: print("show_fixtures not implemented")), False),
+            ("🏁", "Finished", self.callbacks.get('show_finished', lambda: print("show_finished not implemented")), False),
+            ("⚙️", "Settings", self.callbacks.get('show_settings', lambda: print("show_settings not implemented")), False)
         ]
         
         self.nav_buttons = []
@@ -164,7 +164,7 @@ class Sidebar:
             relief=tk.FLAT,
             padx=self.ds.spacing['lg'],
             pady=self.ds.spacing['md'],
-            command=self.callbacks['fetch_matches'],
+            command=self.callbacks.get('fetch_matches', lambda: print("fetch_matches not implemented")),
             cursor='hand2'
         )
         self.fetch_btn.pack(fill=tk.X, pady=(0, self.ds.spacing['sm']))
@@ -180,7 +180,7 @@ class Sidebar:
             relief=tk.SOLID,
             padx=self.ds.spacing['lg'],
             pady=self.ds.spacing['md'],
-            command=self.callbacks['stop_fetching'],
+            command=self.callbacks.get('stop_fetching', lambda: print("stop_fetching not implemented")),
             state=tk.DISABLED,
             cursor='hand2'
         )

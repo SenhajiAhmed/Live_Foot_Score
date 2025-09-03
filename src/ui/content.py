@@ -13,6 +13,9 @@ class ContentArea:
     def __init__(self, parent, design_system):
         self.parent = parent
         self.design = design_system
+        self.current_view = "live_matches"
+        self.match_display = None  # Will be set by main app
+        self.match_organizer = None  # Will be set by main app
         
         self.create_content_area()
         self.setup_modern_scrollable_area()
@@ -198,3 +201,326 @@ class ContentArea:
         """Clear all content from the scrollable area"""
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
+    
+    def set_match_display(self, match_display):
+        """Set the match display component"""
+        self.match_display = match_display
+    
+    def set_match_organizer(self, match_organizer):
+        """Set the match organizer component"""
+        self.match_organizer = match_organizer
+    
+    def show_live_matches(self, data=None):
+        """Show live matches view"""
+        self.current_view = "live_matches"
+        self.update_content_title("Live Matches", "Real-time football scores and updates")
+        
+        if data:
+            filtered_data = self.filter_live_matches(data)
+            if filtered_data:
+                self.display_matches(filtered_data)
+            else:
+                self.show_modern_empty_state("No live matches", "No matches are currently in progress")
+        else:
+            self.show_modern_empty_state("No live matches", "Click 'Fetch Matches' to get the latest scores")
+    
+    def show_fixtures(self, data=None):
+        """Show upcoming fixtures view"""
+        self.current_view = "fixtures"
+        self.update_content_title("Upcoming Fixtures", "Scheduled matches and kick-off times")
+        
+        if data:
+            filtered_data = self.filter_upcoming_matches(data)
+            if filtered_data:
+                self.display_matches(filtered_data)
+            else:
+                self.show_modern_empty_state("No upcoming matches", "No fixtures scheduled at the moment")
+        else:
+            self.show_modern_empty_state("No upcoming matches", "Click 'Fetch Matches' to get the latest fixtures")
+    
+    def show_finished(self, data=None):
+        """Show finished matches view"""
+        self.current_view = "finished"
+        self.update_content_title("Finished Matches", "Completed matches and final scores")
+        
+        if data:
+            filtered_data = self.filter_finished_matches(data)
+            if filtered_data:
+                self.display_matches(filtered_data)
+            else:
+                self.show_modern_empty_state("No finished matches", "No completed matches available at the moment")
+        else:
+            self.show_modern_empty_state("No finished matches", "Click 'Fetch Matches' to get the latest results")
+    
+    def show_settings(self):
+        """Show settings view"""
+        self.current_view = "settings"
+        self.update_content_title("Settings", "Customize your experience")
+        self.show_settings_content()
+    
+    def filter_live_matches(self, data):
+        """Filter data to show only live matches"""
+        if not data or 'events' not in data:
+            return None
+        
+        live_events = []
+        for event in data['events']:
+            if event['status']['type'] == 'inprogress':
+                live_events.append(event)
+        
+        if live_events:
+            return {'events': live_events}
+        return None
+    
+    def filter_upcoming_matches(self, data):
+        """Filter data to show only upcoming matches"""
+        if not data or 'events' not in data:
+            return None
+        
+        upcoming_events = []
+        for event in data['events']:
+            if event['status']['type'] not in ['inprogress', 'finished']:
+                upcoming_events.append(event)
+        
+        if upcoming_events:
+            return {'events': upcoming_events}
+        return None
+    
+    def filter_finished_matches(self, data):
+        """Filter data to show only finished matches"""
+        if not data or 'events' not in data:
+            return None
+        
+        finished_events = []
+        for event in data['events']:
+            if event['status']['type'] == 'finished':
+                finished_events.append(event)
+        
+        if finished_events:
+            return {'events': finished_events}
+        return None
+    
+    def display_matches(self, data):
+        """Display matches using the match display component"""
+        if not self.match_display:
+            self.show_modern_empty_state("Error", "Match display component not initialized")
+            return
+        
+        # Clear previous content
+        self.clear_content()
+        
+        # Organize matches by tournament
+        if not self.match_organizer:
+            self.show_modern_empty_state("Error", "Match organizer not initialized")
+            return
+            
+        matches_by_tournament = self.match_organizer.organize_matches_by_tournament(data)
+        
+        if matches_by_tournament:
+            total_matches = self.match_display.display_tournaments(
+                self.scrollable_frame, 
+                matches_by_tournament
+            )
+            print(f"Displayed {total_matches} matches in {self.current_view} view")
+        else:
+            self.show_modern_empty_state("No matches found", "Try refreshing the data")
+    
+    def show_settings_content(self):
+        """Show settings content"""
+        self.clear_content()
+        
+        settings_container = tk.Frame(self.scrollable_frame, bg=self.design.colors['bg_card'])
+        settings_container.pack(fill=tk.BOTH, expand=True, padx=self.design.spacing['xl'], pady=self.design.spacing['xl'])
+        
+        # Settings title
+        title_frame = tk.Frame(settings_container, bg=self.design.colors['bg_card'])
+        title_frame.pack(fill=tk.X, pady=(0, self.design.spacing['lg']))
+        
+        tk.Label(
+            title_frame,
+            text="⚙️ Application Settings",
+            font=self.design.fonts['headline'],
+            fg=self.design.colors['text_primary'],
+            bg=self.design.colors['bg_card'],
+            anchor='w'
+        ).pack(fill=tk.X)
+        
+        # Theme toggle section
+        self.create_theme_toggle_section(settings_container)
+        
+        # Settings sections
+        self.create_settings_section(settings_container, "Display", [
+            ("Auto-refresh", "Automatically refresh match data"),
+            ("Show notifications", "Show desktop notifications")
+        ])
+        
+        self.create_settings_section(settings_container, "Data", [
+            ("Cache duration", "How long to cache match data"),
+            ("Update frequency", "How often to check for updates"),
+            ("Save favorites", "Remember favorite matches")
+        ])
+        
+        self.create_settings_section(settings_container, "About", [
+            ("Version", "Football Scores Pro v1.0"),
+            ("Developer", "Built with Python & Tkinter"),
+            ("Data source", "Live football data API")
+        ])
+    
+    def create_settings_section(self, parent, section_title, options):
+        """Create a settings section"""
+        section_frame = tk.Frame(parent, bg=self.design.colors['bg_card'])
+        section_frame.pack(fill=tk.X, pady=(0, self.design.spacing['lg']))
+        
+        # Section title
+        tk.Label(
+            section_frame,
+            text=section_title,
+            font=self.design.fonts['body_large'],
+            fg=self.design.colors['primary'],
+            bg=self.design.colors['bg_card'],
+            anchor='w'
+        ).pack(fill=tk.X, pady=(0, self.design.spacing['md']))
+        
+        # Options
+        for option, description in options:
+            option_frame = tk.Frame(section_frame, bg=self.design.colors['bg_card'])
+            option_frame.pack(fill=tk.X, pady=self.design.spacing['xs'])
+            
+            # Option name
+            tk.Label(
+                option_frame,
+                text=option,
+                font=self.design.fonts['body_medium'],
+                fg=self.design.colors['text_primary'],
+                bg=self.design.colors['bg_card'],
+                anchor='w'
+            ).pack(side=tk.LEFT)
+            
+            # Option description
+            tk.Label(
+                option_frame,
+                text=description,
+                font=self.design.fonts['caption'],
+                fg=self.design.colors['text_secondary'],
+                bg=self.design.colors['bg_card'],
+                anchor='w'
+            ).pack(side=tk.LEFT, padx=(self.design.spacing['md'], 0))
+    
+    def create_theme_toggle_section(self, parent):
+        """Create interactive theme toggle section"""
+        theme_frame = tk.Frame(parent, bg=self.design.colors['bg_card'])
+        theme_frame.pack(fill=tk.X, pady=(0, self.design.spacing['lg']))
+        
+        # Section title
+        tk.Label(
+            theme_frame,
+            text="Theme",
+            font=self.design.fonts['body_large'],
+            fg=self.design.colors['primary'],
+            bg=self.design.colors['bg_card'],
+            anchor='w'
+        ).pack(fill=tk.X, pady=(0, self.design.spacing['md']))
+        
+        # Theme toggle container
+        toggle_container = tk.Frame(theme_frame, bg=self.design.colors['bg_card'])
+        toggle_container.pack(fill=tk.X)
+        
+        # Current theme label
+        self.theme_status_label = tk.Label(
+            toggle_container,
+            text=f"Current: {self.design.get_theme().title()} Mode",
+            font=self.design.fonts['body_medium'],
+            fg=self.design.colors['text_primary'],
+            bg=self.design.colors['bg_card'],
+            anchor='w'
+        )
+        self.theme_status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # Theme toggle buttons
+        button_frame = tk.Frame(toggle_container, bg=self.design.colors['bg_card'])
+        button_frame.pack(side=tk.RIGHT)
+        
+        # Light mode button
+        self.light_btn = tk.Button(
+            button_frame,
+            text="☀️ Light",
+            font=self.design.fonts['body_medium'],
+            bg=self.design.colors['primary'] if not self.design.is_dark_theme() else self.design.colors['bg_card'],
+            fg=self.design.colors['text_white'] if not self.design.is_dark_theme() else self.design.colors['text_primary'],
+            bd=1,
+            relief=tk.SOLID if self.design.is_dark_theme() else tk.FLAT,
+            padx=self.design.spacing['md'],
+            pady=self.design.spacing['sm'],
+            command=lambda: self.toggle_theme('light'),
+            cursor='hand2'
+        )
+        self.light_btn.pack(side=tk.LEFT, padx=(0, self.design.spacing['sm']))
+        
+        # Dark mode button
+        self.dark_btn = tk.Button(
+            button_frame,
+            text="🌙 Dark",
+            font=self.design.fonts['body_medium'],
+            bg=self.design.colors['primary'] if self.design.is_dark_theme() else self.design.colors['bg_card'],
+            fg=self.design.colors['text_white'] if self.design.is_dark_theme() else self.design.colors['text_primary'],
+            bd=1,
+            relief=tk.SOLID if not self.design.is_dark_theme() else tk.FLAT,
+            padx=self.design.spacing['md'],
+            pady=self.design.spacing['sm'],
+            command=lambda: self.toggle_theme('dark'),
+            cursor='hand2'
+        )
+        self.dark_btn.pack(side=tk.LEFT)
+    
+    def toggle_theme(self, theme):
+        """Toggle between light and dark themes"""
+        if hasattr(self, 'theme_callback') and self.theme_callback:
+            self.theme_callback(theme)
+        else:
+            # Fallback: update design system directly
+            self.design.switch_theme(theme)
+            self.update_theme_buttons()
+    
+    def set_theme_callback(self, callback):
+        """Set callback function for theme changes"""
+        self.theme_callback = callback
+    
+    def update_theme_buttons(self):
+        """Update theme toggle buttons appearance"""
+        if hasattr(self, 'theme_status_label'):
+            self.theme_status_label.config(text=f"Current: {self.design.get_theme().title()} Mode")
+        
+        if hasattr(self, 'light_btn') and hasattr(self, 'dark_btn'):
+            # Update light button
+            self.light_btn.config(
+                bg=self.design.colors['primary'] if not self.design.is_dark_theme() else self.design.colors['bg_card'],
+                fg=self.design.colors['text_white'] if not self.design.is_dark_theme() else self.design.colors['text_primary'],
+                relief=tk.FLAT if not self.design.is_dark_theme() else tk.SOLID
+            )
+            
+            # Update dark button
+            self.dark_btn.config(
+                bg=self.design.colors['primary'] if self.design.is_dark_theme() else self.design.colors['bg_card'],
+                fg=self.design.colors['text_white'] if self.design.is_dark_theme() else self.design.colors['text_primary'],
+                relief=tk.FLAT if self.design.is_dark_theme() else tk.SOLID
+            )
+    
+    def update_theme(self, design_system):
+        """Update component colors when theme changes"""
+        self.design = design_system
+        
+        # Update content frame
+        self.content.configure(bg=self.design.colors['bg_card'])
+        
+        # Update content title and subtitle
+        self.content_title.config(fg=self.design.colors['text_primary'], bg=self.design.colors['bg_card'])
+        self.content_subtitle.config(fg=self.design.colors['text_secondary'], bg=self.design.colors['bg_card'])
+        
+        # Update canvas
+        self.canvas.configure(bg=self.design.colors['bg_card'])
+        
+        # Update scrollable frame
+        self.scrollable_frame.configure(bg=self.design.colors['bg_card'])
+        
+        # Update theme buttons if they exist
+        self.update_theme_buttons()
