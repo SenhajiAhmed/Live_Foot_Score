@@ -20,6 +20,7 @@ class Header:
     
     def create_header(self):
         """Create modern header with gradient background"""
+        # Store header frame reference for theme updates
         self.header = tk.Frame(
             self.parent,
             bg=self.design.colors['bg_header'],
@@ -28,41 +29,50 @@ class Header:
         self.header.pack(fill=tk.X)
         self.header.pack_propagate(False)
         
+        # Store references to themed widgets
+        self.themed_widgets = []
+        
         # Left section with logo and title
-        left_section = tk.Frame(self.header, bg=self.design.colors['bg_header'])
-        left_section.pack(side=tk.LEFT, fill=tk.Y, padx=self.design.spacing['xl'])
+        self.left_section = tk.Frame(self.header, bg=self.design.colors['bg_header'])
+        self.left_section.pack(side=tk.LEFT, fill=tk.Y, padx=self.design.spacing['xl'])
+        self.themed_widgets.append(self.left_section)
         
         # Logo and title container
-        logo_container = tk.Frame(left_section, bg=self.design.colors['bg_header'])
-        logo_container.pack(expand=True)
+        self.logo_container = tk.Frame(self.left_section, bg=self.design.colors['bg_header'])
+        self.logo_container.pack(expand=True)
+        self.themed_widgets.append(self.logo_container)
         
         # Modern logo
         self.logo_label = tk.Label(
-            logo_container,
+            self.logo_container,
             text="⚽",
             font=('Inter', 28),
             bg=self.design.colors['bg_header'],
             fg=self.design.colors['success']
         )
         self.logo_label.pack(side=tk.LEFT, padx=(0, self.design.spacing['md']))
+        self.themed_widgets.append(self.logo_label)
         
         # App title with modern typography
-        title_label = tk.Label(
-            logo_container,
+        self.title_label = tk.Label(
+            self.logo_container,
             text="FOOTBALL SCORES PRO",
             font=self.design.fonts['display_medium'],
             bg=self.design.colors['bg_header'],
             fg=self.design.colors['text_white']
         )
-        title_label.pack(side=tk.LEFT)
+        self.title_label.pack(side=tk.LEFT)
+        self.themed_widgets.append(self.title_label)
         
         # Right section with date and live indicator
-        right_section = tk.Frame(self.header, bg=self.design.colors['bg_header'])
-        right_section.pack(side=tk.RIGHT, fill=tk.Y, padx=self.design.spacing['xl'])
+        self.right_section = tk.Frame(self.header, bg=self.design.colors['bg_header'])
+        self.right_section.pack(side=tk.RIGHT, fill=tk.Y, padx=self.design.spacing['xl'])
+        self.themed_widgets.append(self.right_section)
         
         # Live indicator
-        self.live_indicator = tk.Frame(right_section, bg=self.design.colors['bg_header'])
+        self.live_indicator = tk.Frame(self.right_section, bg=self.design.colors['bg_header'])
         self.live_indicator.pack(side=tk.RIGHT, padx=(self.design.spacing['lg'], 0))
+        self.themed_widgets.append(self.live_indicator)
         
         self.live_dot = tk.Label(
             self.live_indicator,
@@ -86,7 +96,7 @@ class Header:
         self.date_var.set(datetime.now().strftime("%A, %B %d, %Y"))
         
         date_label = tk.Label(
-            right_section,
+            self.right_section,
             textvariable=self.date_var,
             font=self.design.fonts['body_medium'],
             bg=self.design.colors['bg_header'],
@@ -97,6 +107,48 @@ class Header:
     def start_live_animations(self):
         """Start background animations for live elements"""
         self.animate_live_indicator()
+        
+    def update_theme(self, design_system):
+        """Update theme colors for all widgets"""
+        self.design = design_system
+        
+        # Update header background
+        self.header.config(bg=self.design.colors['bg_header'])
+        
+        # Update all themed widgets
+        for widget in self.themed_widgets:
+            try:
+                if isinstance(widget, tk.Frame):
+                    widget.config(bg=self.design.colors['bg_header'])
+                elif isinstance(widget, tk.Label):
+                    if hasattr(self, 'logo_label') and widget == self.logo_label:
+                        widget.config(
+                            bg=self.design.colors['bg_header'],
+                            fg=self.design.colors['success']
+                        )
+                    elif hasattr(self, 'title_label') and widget == self.title_label:
+                        widget.config(
+                            bg=self.design.colors['bg_header'],
+                            fg=self.design.colors['text_white']
+                        )
+                    else:
+                        widget.config(
+                            bg=self.design.colors['bg_header'],
+                            fg=self.design.colors['text_white']
+                        )
+            except Exception as e:
+                print(f"Error updating widget theme: {e}")
+        
+        # Update live indicator if it exists
+        if hasattr(self, 'live_dot'):
+            self.live_dot.config(
+                bg=self.design.colors['bg_header'],
+                fg=self.design.colors['live']
+            )
+        
+        # Update all child widgets
+        for child in self.header.winfo_children():
+            self.update_widget_theme(child)
     
     def animate_live_indicator(self):
         """Animate live indicator in header"""
@@ -110,6 +162,29 @@ class Header:
         # Schedule next animation
         self.parent.after(1000, self.animate_live_indicator)
     
-    def stop_animations(self):
-        """Stop live animations"""
-        self.animation_active = False
+    def update_widget_theme(self, widget):
+        """Recursively update widget theme"""
+        try:
+            if isinstance(widget, tk.Label):
+                text = widget.cget('text')
+                if text == "FOOTBALL SCORES PRO" or text == "LIVE":
+                    widget.config(
+                        bg=self.design.colors['bg_header'],
+                        fg=self.design.colors['text_white']
+                    )
+                elif hasattr(self, 'date_var') and widget.cget('textvariable') == self.date_var:
+                    widget.config(
+                        bg=self.design.colors['bg_header'],
+                        fg=self.design.colors['text_white']
+                    )
+                elif widget not in self.themed_widgets:  # Only update if not already handled
+                    widget.config(
+                        bg=self.design.colors['bg_header'],
+                        fg=self.design.colors['text_white']
+                    )
+            
+            # Recursively update child widgets
+            for child in widget.winfo_children():
+                self.update_widget_theme(child)
+        except Exception as e:
+            print(f"Error updating widget theme: {e}")

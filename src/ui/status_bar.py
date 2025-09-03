@@ -60,3 +60,27 @@ class StatusBar:
     def update_match_count(self, count):
         """Update match count display"""
         self.match_count_label.config(text=f"{count} matches")
+    
+    def update_theme(self, design_system):
+        """Update component colors when theme changes"""
+        self.design = design_system
+        
+        # Update status container
+        self.parent.configure(bg=self.design.colors['primary'])
+        
+        # Update status content
+        for widget in self.parent.winfo_children():
+            if isinstance(widget, tk.Frame):
+                widget.configure(bg=self.design.colors['primary'])
+        
+        # Update status bar
+        self.status_bar.config(
+            fg=self.design.colors['text_white'],
+            bg=self.design.colors['primary']
+        )
+        
+        # Update match count label
+        self.match_count_label.config(
+            fg=self.design.colors['text_white'],
+            bg=self.design.colors['primary']
+        )

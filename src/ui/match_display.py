@@ -369,3 +369,10 @@ class MatchDisplay:
         elif winner_code == 2:  # Away win
             away_label.config(fg=self.design.colors['finished'], font=self.design.fonts['body_medium'] + ('bold',))
             away_score_label.config(fg=self.design.colors['finished'], font=self.design.fonts['headline'] + ('bold',))
+    
+    def update_theme(self, design_system=None):
+        """Update component colors when theme changes"""
+        if design_system:
+            self.design = design_system
+        # The actual display elements are recreated when needed, so we don't need to update them here
+        # The design system reference has been updated, so new elements will use the correct colors

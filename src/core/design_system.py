@@ -10,12 +10,43 @@ from tkinter import ttk
 class DesignSystem:
     """Centralized design system for the Football Scores Pro application."""
     
-    def __init__(self, theme='light'):
-        self.current_theme = theme
+    def __init__(self, theme='dark'):
+        self._theme = theme
+        self._callbacks = []
         self.setup_colors()
         self.setup_fonts()
         self.setup_spacing()
         self.setup_ttk_styles()
+    
+    @property
+    def current_theme(self):
+        return self._theme
+    
+    @current_theme.setter
+    def current_theme(self, value):
+        if value != self._theme:
+            self._theme = value
+            self.setup_colors()
+            self.setup_ttk_styles()
+            self.notify_theme_change()
+    
+    def register_theme_change_callback(self, callback):
+        """Register a callback to be called when theme changes"""
+        if callback not in self._callbacks:
+            self._callbacks.append(callback)
+    
+    def unregister_theme_change_callback(self, callback):
+        """Unregister a theme change callback"""
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
+    
+    def notify_theme_change(self):
+        """Notify all registered callbacks of theme change"""
+        for callback in self._callbacks[:]:  # Create a copy to allow modification during iteration
+            try:
+                callback()
+            except Exception as e:
+                print(f"Error in theme change callback: {e}")
     
     def setup_colors(self):
         """Setup modern color palette based on current theme"""
@@ -55,35 +86,35 @@ class DesignSystem:
         else:  # Light theme
             self.colors = {
                 # Primary Colors
-                'primary': '#0066FF',           # Electric Blue
-                'success': '#00C851',           # Stadium Green
-                'live': '#FF1744',              # Live Red
-                'warning': '#FFD700',           # Championship Gold
-                'danger': '#FF6B35',            # Sunset Orange
+                'primary': '#1a73e8',           # Google Blue
+                'success': '#0b8043',           # Darker Green
+                'live': '#d93025',              # Google Red
+                'warning': '#e37400',           # Orange
+                'danger': '#d93025',            # Google Red
                 
                 # Background Colors
-                'bg_primary': '#F8F9FA',        # Cloud White background
-                'bg_secondary': '#FFFFFF',       # Pure white
-                'bg_card': '#FFFFFF',           # Card backgrounds
-                'bg_sidebar': '#FFFFFF',        # Sidebar background
-                'bg_header': '#1B1B2F',         # Midnight Navy
+                'bg_primary': '#f8f9fa',        # Light gray background
+                'bg_secondary': '#ffffff',       # Pure white
+                'bg_card': '#ffffff',           # Card backgrounds
+                'bg_sidebar': '#f1f3f4',       # Light gray sidebar
+                'bg_header': '#1a73e8',         # Blue header
                 
                 # Text Colors
-                'text_primary': '#1B1B2F',      # Midnight Navy
-                'text_secondary': '#6C757D',    # Steel Gray
-                'text_muted': '#ADB5BD',        # Light gray
-                'text_white': '#FFFFFF',        # White text
+                'text_primary': '#202124',      # Almost black
+                'text_secondary': '#5f6368',    # Dark gray
+                'text_muted': '#9aa0a6',        # Medium gray
+                'text_white': '#ffffff',        # White text
                 
                 # State Colors
-                'finished': '#4CAF50',          # Victory Green
-                'upcoming': '#3F51B5',          # Upcoming Indigo
-                'draw': '#FFC107',              # Draw Amber
+                'finished': '#0b8043',          # Dark Green
+                'upcoming': '#1a73e8',          # Blue
+                'draw': '#e37400',              # Orange
                 
                 # UI Colors
-                'border': '#DEE2E6',            # Light border
-                'shadow': 'rgba(0,0,0,0.1)',    # Subtle shadow
-                'hover': '#F8F9FA',             # Hover state
-                'active': '#E3F2FD',            # Active state
+                'border': '#dadce0',            # Light gray border
+                'shadow': 'rgba(60,64,67,0.15)',# Subtle shadow
+                'hover': '#f1f3f4',             # Light gray hover
+                'active': '#e8f0fe',            # Light blue active
             }
     
     def setup_fonts(self):

@@ -30,26 +30,96 @@ class FootballApp:
         self.root.geometry("1400x900")
         self.root.minsize(1200, 800)
         
-        # Initialize design system
-        self.design = DesignSystem()
-        
-        # Initialize theme manager
-        self.theme_manager = ThemeManager(self.design)
-        
-        # Initialize data processor
-        self.data_processor = DataProcessor()
-        
-        # Initialize match display
-        self.match_display = MatchDisplay(self.design)
-        
-        # Setup main container
-        self.setup_main_container()
-        
-        # Initialize UI components
-        self.initialize_components()
-        
-        # Automatically fetch matches when the app starts
-        self.root.after(1000, self.fetch_matches)
+        try:
+            # Initialize design system with saved theme or default to dark
+            saved_theme = self.load_theme_preference()
+            self.design = DesignSystem(theme=saved_theme or 'dark')
+            
+            # Initialize theme manager
+            self.theme_manager = ThemeManager(self.design)
+            
+            # Initialize data processor
+            self.data_processor = DataProcessor()
+            
+            # Initialize match display
+            self.match_display = MatchDisplay(self.design)
+            
+            # Setup main container
+            self.setup_main_container()
+            
+            # Initialize UI components
+            self.initialize_components()
+            
+            # Register for theme changes
+            self.design.register_theme_change_callback(self.on_theme_changed)
+            
+            # Apply initial theme
+            self.apply_theme()
+            
+            # Automatically fetch matches when the app starts
+            self.root.after(1000, self.fetch_matches)
+            
+        except Exception as e:
+            messagebox.showerror("Initialization Error", f"Failed to initialize application: {str(e)}")
+            self.root.destroy()
+    
+    def load_theme_preference(self):
+        """Load theme preference from config file"""
+        config_path = os.path.join(os.path.expanduser('~'), '.football_scores_pro', 'config.ini')
+        if os.path.exists(config_path):
+            try:
+                import configparser
+                config = configparser.ConfigParser()
+                config.read(config_path)
+                return config.get('App', 'theme', fallback='dark')
+            except Exception:
+                return 'dark'
+        return 'dark'
+    
+    def save_theme_preference(self, theme):
+        """Save theme preference to config file"""
+        try:
+            import configparser
+            import os
+            
+            config_dir = os.path.join(os.path.expanduser('~'), '.football_scores_pro')
+            os.makedirs(config_dir, exist_ok=True)
+            
+            config = configparser.ConfigParser()
+            config['App'] = {'theme': theme}
+            
+            with open(os.path.join(config_dir, 'config.ini'), 'w') as f:
+                config.write(f)
+        except Exception as e:
+            print(f"Failed to save theme preference: {e}")
+    
+    def on_theme_changed(self):
+        """Handle theme change event"""
+        self.save_theme_preference(self.design.current_theme)
+        self.apply_theme()
+    
+    def apply_theme(self):
+        """Apply current theme to the root window and main container"""
+        try:
+            # Update root and main container colors
+            self.root.config(bg=self.design.colors['bg_primary'])
+            self.main_container.config(bg=self.design.colors['bg_primary'])
+            self.content_frame.config(bg=self.design.colors['bg_secondary'])
+            
+            # Update header if it exists
+            if hasattr(self, 'header') and hasattr(self.header, 'update_theme'):
+                self.header.update_theme(self.design)
+                
+            # Update sidebar if it exists
+            if hasattr(self, 'sidebar') and hasattr(self.sidebar, 'refresh'):
+                self.sidebar.refresh()
+                
+            # Update content area if it exists
+            if hasattr(self, 'content') and hasattr(self.content, 'update_theme'):
+                self.content.update_theme(self.design)
+                
+        except Exception as e:
+            print(f"Error applying theme: {e}")
     
     def setup_main_container(self):
         """Setup the main container with gradient background"""
@@ -238,7 +308,8 @@ def main():
     root = tk.Tk()
     
     # Configure root window with modern styling
-    root.configure(bg='#F8F9FA')
+    # Will be updated by the design system based on theme
+    root.configure(bg='#1A1A1A')  # Start with dark theme
     
     # Set window icon (if available)
     try:

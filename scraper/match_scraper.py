@@ -101,3 +101,9 @@ class MatchScraper:
         except Exception as e:
             print(f"❌ Playwright error: {e}")
             return False
+    
+    def stop(self):
+        """Stop the scraper (placeholder method for compatibility)"""
+        # This method is called by the data processor but the scraper
+        # doesn't need explicit stopping since it runs synchronously
+        pass

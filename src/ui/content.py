@@ -505,22 +505,61 @@ class ContentArea:
                 relief=tk.FLAT if self.design.is_dark_theme() else tk.SOLID
             )
     
-    def update_theme(self, design_system):
+    def update_theme(self, design_system=None):
         """Update component colors when theme changes"""
-        self.design = design_system
+        if design_system:
+            self.design = design_system
         
-        # Update content frame
-        self.content.configure(bg=self.design.colors['bg_card'])
-        
-        # Update content title and subtitle
-        self.content_title.config(fg=self.design.colors['text_primary'], bg=self.design.colors['bg_card'])
-        self.content_subtitle.config(fg=self.design.colors['text_secondary'], bg=self.design.colors['bg_card'])
-        
-        # Update canvas
-        self.canvas.configure(bg=self.design.colors['bg_card'])
-        
-        # Update scrollable frame
-        self.scrollable_frame.configure(bg=self.design.colors['bg_card'])
-        
-        # Update theme buttons if they exist
-        self.update_theme_buttons()
+        try:
+            # Update content frame
+            if hasattr(self, 'content'):
+                self.content.configure(bg=self.design.colors['bg_card'])
+            
+            # Update content title and subtitle
+            if hasattr(self, 'content_title'):
+                self.content_title.config(
+                    fg=self.design.colors['text_primary'], 
+                    bg=self.design.colors['bg_card']
+                )
+            
+            if hasattr(self, 'content_subtitle'):
+                self.content_subtitle.config(
+                    fg=self.design.colors['text_secondary'], 
+                    bg=self.design.colors['bg_card']
+                )
+            
+            # Update canvas and scrollable frame
+            if hasattr(self, 'canvas'):
+                self.canvas.configure(bg=self.design.colors['bg_card'])
+            
+            if hasattr(self, 'scrollable_frame'):
+                self.scrollable_frame.configure(bg=self.design.colors['bg_card'])
+            
+            # Update theme buttons if they exist
+            if hasattr(self, 'light_btn') and hasattr(self, 'dark_btn'):
+                self.update_theme_buttons()
+            
+            # Update header frames
+            if hasattr(self, 'content'):
+                self.update_header_frames()
+                
+        except Exception as e:
+            print(f"Error updating content area theme: {e}")
+    
+    def update_header_frames(self):
+        """Update header frame themes"""
+        # Update content header frame
+        for widget in self.content.winfo_children():
+            if isinstance(widget, tk.Frame):
+                widget.configure(bg=self.design.colors['bg_card'])
+                # Update header content frame
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Frame):
+                        child.configure(bg=self.design.colors['bg_card'])
+                        # Update labels in header
+                        for grandchild in child.winfo_children():
+                            if isinstance(grandchild, tk.Label):
+                                grandchild.config(
+                                    fg=self.design.colors['text_primary'],
+                                    bg=self.design.colors['bg_card']
+                                )
