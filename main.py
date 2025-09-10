@@ -178,6 +178,13 @@ class FootballApp:
         """Start fetching matches with modern UI updates"""
         if self.data_processor.is_fetching():
             return
+        
+        # Check if we have valid cached data
+        cached_data = self.data_processor.get_cached_data()
+        if cached_data:
+            print("Using cached data for faster loading")
+            self.process_results(cached_data)
+            return
             
         # Update UI state
         self.sidebar.set_fetch_button_state(False)
@@ -197,6 +204,8 @@ class FootballApp:
     def on_data_fetched(self, success, data_or_error):
         """Callback for when data fetching is complete"""
         if success:
+            # Cache the data for future use
+            self.data_processor.set_cached_data(data_or_error)
             self.process_results(data_or_error)
         else:
             self.show_error(data_or_error)
@@ -204,28 +213,39 @@ class FootballApp:
     def process_results(self, data):
         """Process and display results with modern UI"""
         try:
+            # Get limited data for initial display to prevent UI freezing
+            limited_data = self.data_processor.get_limited_data()
+            
             # Get statistics for status updates
-            matches_by_tournament = MatchOrganizer.organize_matches_by_tournament(data)
+            matches_by_tournament = MatchOrganizer.organize_matches_by_tournament(limited_data)
             stats = MatchOrganizer.get_match_statistics(matches_by_tournament)
             
             # Update status with overall statistics
-            self.sidebar.update_status(f"Loaded {stats['total_matches']} matches", self.design.colors['success'], "●")
-            self.status_bar.update_status(f"Successfully loaded {stats['total_matches']} matches")
+            total_available = limited_data.get('total_available', stats['total_matches'])
+            showing = limited_data.get('showing', stats['total_matches'])
+            
+            if total_available > showing:
+                self.sidebar.update_status(f"Showing {showing} of {total_available} matches", self.design.colors['success'], "●")
+                self.status_bar.update_status(f"Showing {showing} of {total_available} matches (lazy loading enabled)")
+            else:
+                self.sidebar.update_status(f"Loaded {stats['total_matches']} matches", self.design.colors['success'], "●")
+                self.status_bar.update_status(f"Successfully loaded {stats['total_matches']} matches")
+            
             self.status_bar.update_match_count(stats['total_matches'])
             
             print(f"Loaded {stats['total_tournaments']} tournaments with {stats['total_matches']} matches")
             print(f"Live: {stats['live_matches']}, Finished: {stats['finished_matches']}, Upcoming: {stats['upcoming_matches']}")
             
-            # Display content based on current view
+            # Display content based on current view using limited data
             if self.content.current_view == "live_matches":
-                self.content.show_live_matches(data)
+                self.content.show_live_matches(limited_data)
             elif self.content.current_view == "fixtures":
-                self.content.show_fixtures(data)
+                self.content.show_fixtures(limited_data)
             elif self.content.current_view == "finished":
-                self.content.show_finished(data)
+                self.content.show_finished(limited_data)
             else:
                 # Default to live matches view
-                self.content.show_live_matches(data)
+                self.content.show_live_matches(limited_data)
                 
         except Exception as e:
             self.show_error(f"Error processing results: {str(e)}")

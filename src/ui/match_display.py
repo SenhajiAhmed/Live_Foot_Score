@@ -5,6 +5,8 @@ Contains logic for displaying matches, tournaments, and match cards.
 
 import tkinter as tk
 from datetime import datetime
+import threading
+import time
 
 
 class MatchDisplay:
@@ -12,20 +14,270 @@ class MatchDisplay:
     
     def __init__(self, design_system):
         self.design = design_system
+        self.batch_size = 10  # Number of matches to render per batch
+        self.render_delay = 50  # Delay between batches in milliseconds
+        self.is_rendering = False
+        self.current_batch = 0
+        self.all_tournaments = []
+        self.scrollable_frame = None
+        self.root = None  # Will be set when needed
+        self.visible_matches = []  # Track visible match widgets
+        self.match_height = 120  # Approximate height of each match card
+        self.viewport_height = 0  # Height of visible area
     
     def display_tournaments(self, scrollable_frame, matches_by_tournament):
-        """Display all tournaments with modern styling"""
-        total_matches = 0
-        tournament_list = list(matches_by_tournament.values())
+        """Display all tournaments with lazy loading for better performance"""
+        self.scrollable_frame = scrollable_frame
+        self.all_tournaments = list(matches_by_tournament.values())
+        self.current_batch = 0
+        self.is_rendering = True
         
-        for i, tournament_info in enumerate(tournament_list):
-            if i > 0:
-                self.add_tournament_separator(scrollable_frame)
-            
-            self.display_modern_tournament(scrollable_frame, tournament_info)
-            total_matches += len(tournament_info['matches'])
+        # Get root window reference
+        self.root = scrollable_frame.winfo_toplevel()
+        
+        # Calculate total matches
+        total_matches = sum(len(tournament['matches']) for tournament in self.all_tournaments)
+        
+        # Start lazy loading in a separate thread
+        threading.Thread(target=self._lazy_render_tournaments, daemon=True).start()
         
         return total_matches
+    
+    def _lazy_render_tournaments(self):
+        """Render tournaments in batches to prevent UI freezing"""
+        try:
+            for i, tournament_info in enumerate(self.all_tournaments):
+                if not self.is_rendering:
+                    break
+                    
+                # Add separator between tournaments
+                if i > 0:
+                    self.root.after(0, lambda: self.add_tournament_separator(self.scrollable_frame))
+                    time.sleep(self.render_delay / 1000)
+                
+                # Render tournament with lazy loading
+                self._render_tournament_lazy(tournament_info)
+                
+                # Small delay to keep UI responsive
+                time.sleep(self.render_delay / 1000)
+                
+        except Exception as e:
+            print(f"Error in lazy rendering: {e}")
+        finally:
+            self.is_rendering = False
+    
+    def _render_tournament_lazy(self, tournament_info):
+        """Render a single tournament with lazy loading for matches"""
+        # Tournament container
+        tournament_container = tk.Frame(
+            self.scrollable_frame,
+            bg=self.design.colors['bg_card']
+        )
+        self.root.after(0, lambda: tournament_container.pack(fill=tk.X, padx=self.design.spacing['lg'], pady=self.design.spacing['md']))
+        
+        # Tournament header
+        self.root.after(0, lambda: self._create_tournament_header(tournament_container, tournament_info))
+        
+        # Matches container
+        matches_container = tk.Frame(tournament_container, bg=self.design.colors['bg_card'])
+        self.root.after(0, lambda: matches_container.pack(fill=tk.X))
+        
+        # Group matches by status
+        live_matches = []
+        finished_matches = []
+        upcoming_matches = []
+        
+        for match in tournament_info['matches']:
+            status = match['status']['type']
+            if status == 'inprogress':
+                live_matches.append(match)
+            elif status == 'finished':
+                finished_matches.append(match)
+            else:
+                upcoming_matches.append(match)
+        
+        # Render match sections with lazy loading
+        if live_matches:
+            self.root.after(0, lambda: self._create_match_section_lazy("🔴 LIVE", live_matches, matches_container, 'live'))
+        if finished_matches:
+            self.root.after(0, lambda: self._create_match_section_lazy("✅ FINISHED", finished_matches, matches_container, 'finished'))
+        if upcoming_matches:
+            self.root.after(0, lambda: self._create_match_section_lazy("📅 UPCOMING", upcoming_matches, matches_container, 'upcoming'))
+    
+    def _create_tournament_header(self, parent, tournament_info):
+        """Create tournament header"""
+        # Tournament header with modern styling
+        header_frame = tk.Frame(parent, bg=self.design.colors['bg_card'])
+        header_frame.pack(fill=tk.X, pady=(0, self.design.spacing['md']))
+        
+        # Tournament name with accent
+        title_frame = tk.Frame(header_frame, bg=self.design.colors['bg_card'])
+        title_frame.pack(fill=tk.X)
+        
+        # Color accent bar
+        accent_bar = tk.Frame(
+            title_frame,
+            bg=self.design.colors['primary'],
+            width=4,
+            height=24
+        )
+        accent_bar.pack(side=tk.LEFT, padx=(0, self.design.spacing['md']))
+        
+        tk.Label(
+            title_frame,
+            text=tournament_info['tournament'],
+            font=self.design.fonts['headline'],
+            fg=self.design.colors['text_primary'],
+            bg=self.design.colors['bg_card'],
+            anchor='w'
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # Round info
+        if tournament_info['round'] and tournament_info['round'] != 'Regular Season':
+            tk.Label(
+                header_frame,
+                text=tournament_info['round'],
+                font=self.design.fonts['caption'],
+                fg=self.design.colors['text_secondary'],
+                bg=self.design.colors['bg_card'],
+                anchor='w'
+            ).pack(fill=tk.X, pady=(self.design.spacing['xs'], 0))
+    
+    def _create_match_section_lazy(self, title, matches, parent, section_type):
+        """Create a section for matches with lazy loading"""
+        section_frame = tk.Frame(parent, bg=self.design.colors['bg_card'])
+        section_frame.pack(fill=tk.X, pady=(0, self.design.spacing['md']))
+        
+        # Section header
+        section_header = tk.Frame(section_frame, bg=self.design.colors['bg_card'])
+        section_header.pack(fill=tk.X, pady=(0, self.design.spacing['sm']))
+        
+        tk.Label(
+            section_header,
+            text=title,
+            font=self.design.fonts['label'],
+            fg=self.design.get_section_color(section_type),
+            bg=self.design.colors['bg_card'],
+            anchor='w'
+        ).pack(side=tk.LEFT)
+        
+        tk.Label(
+            section_header,
+            text=f"({len(matches)})",
+            font=self.design.fonts['caption'],
+            fg=self.design.colors['text_muted'],
+            bg=self.design.colors['bg_card']
+        ).pack(side=tk.LEFT, padx=(self.design.spacing['xs'], 0))
+        
+        # Matches grid
+        matches_grid = tk.Frame(section_frame, bg=self.design.colors['bg_card'])
+        matches_grid.pack(fill=tk.X)
+        
+        # Render matches in batches
+        self._render_matches_batch(matches, matches_grid, section_type, 0)
+    
+    def _render_matches_batch(self, matches, parent, section_type, start_index):
+        """Render a batch of matches with lazy loading"""
+        end_index = min(start_index + self.batch_size, len(matches))
+        
+        for i in range(start_index, end_index):
+            if not self.is_rendering:
+                break
+                
+            # Create row frame for every 2 matches
+            if (i - start_index) % 2 == 0:
+                row_frame = tk.Frame(parent, bg=self.design.colors['bg_card'])
+                row_frame.pack(fill=tk.X, pady=self.design.spacing['xs'])
+            
+            # Create match card
+            self.create_modern_match_card(matches[i], row_frame, section_type)
+        
+        # If there are more matches, schedule the next batch
+        if end_index < len(matches) and self.is_rendering:
+            self.root.after(self.render_delay, 
+                          lambda: self._render_matches_batch(matches, parent, section_type, end_index))
+    
+    def stop_rendering(self):
+        """Stop the current rendering process"""
+        self.is_rendering = False
+    
+    def setup_virtual_scrolling(self, canvas):
+        """Setup virtual scrolling for better performance"""
+        self.canvas = canvas
+        self.viewport_height = canvas.winfo_height()
+        
+        # Bind scroll events
+        canvas.bind('<Configure>', self.on_canvas_configure)
+        canvas.bind('<Button-4>', self.on_mousewheel)  # Linux scroll up
+        canvas.bind('<Button-5>', self.on_mousewheel)  # Linux scroll down
+        canvas.bind('<MouseWheel>', self.on_mousewheel)  # Windows/Mac scroll
+    
+    def on_canvas_configure(self, event):
+        """Handle canvas resize"""
+        self.viewport_height = event.height
+        self.update_visible_matches()
+    
+    def on_mousewheel(self, event):
+        """Handle mouse wheel scrolling"""
+        # Scroll the canvas
+        if event.num == 4 or event.delta > 0:
+            self.canvas.yview_scroll(-1, "units")
+        elif event.num == 5 or event.delta < 0:
+            self.canvas.yview_scroll(1, "units")
+        
+        # Update visible matches after scrolling
+        self.root.after(10, self.update_visible_matches)
+    
+    def update_visible_matches(self):
+        """Update which matches are visible and should be rendered"""
+        if not self.canvas:
+            return
+            
+        # Get scroll position
+        scroll_top = self.canvas.canvasy(0)
+        scroll_bottom = scroll_top + self.viewport_height
+        
+        # Calculate which matches should be visible
+        start_index = max(0, int(scroll_top // self.match_height) - 2)  # Add buffer
+        end_index = min(len(self.all_tournaments), int(scroll_bottom // self.match_height) + 2)  # Add buffer
+        
+        # Hide matches outside viewport
+        for i, match_widget in enumerate(self.visible_matches):
+            if i < start_index or i >= end_index:
+                if match_widget.winfo_exists():
+                    match_widget.pack_forget()
+            else:
+                if match_widget.winfo_exists():
+                    match_widget.pack(fill=tk.X, padx=self.design.spacing['lg'], pady=self.design.spacing['md'])
+    
+    def create_virtual_match_card(self, match, parent, section_type, index):
+        """Create a virtual match card that can be shown/hidden"""
+        # Create placeholder frame for virtual scrolling
+        placeholder = tk.Frame(parent, height=self.match_height, bg=self.design.colors['bg_card'])
+        
+        # Store the actual match data
+        placeholder.match_data = match
+        placeholder.section_type = section_type
+        placeholder.index = index
+        
+        # Only render if visible
+        if self.is_match_visible(index):
+            self.create_modern_match_card(match, placeholder, section_type)
+        
+        return placeholder
+    
+    def is_match_visible(self, index):
+        """Check if a match at given index should be visible"""
+        if not self.canvas:
+            return True  # If no virtual scrolling, show all
+            
+        scroll_top = self.canvas.canvasy(0)
+        scroll_bottom = scroll_top + self.viewport_height
+        
+        match_top = index * self.match_height
+        match_bottom = match_top + self.match_height
+        
+        return not (match_bottom < scroll_top or match_top > scroll_bottom)
     
     def display_modern_tournament(self, parent, tournament_info):
         """Display tournament with modern card design"""

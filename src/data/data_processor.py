@@ -19,6 +19,10 @@ class DataProcessor:
         self.is_running = False
         self.json_data = None
         self.last_error = None
+        self.max_initial_matches = 50  # Limit initial matches to prevent UI freezing
+        self.cache_duration = 300  # Cache data for 5 minutes
+        self.last_fetch_time = 0
+        self.cached_data = None
     
     def start_fetching(self, callback=None):
         """Start fetching matches in a separate thread"""
@@ -99,6 +103,62 @@ class DataProcessor:
     def get_last_error(self):
         """Get the last error message"""
         return self.last_error
+    
+    def get_limited_data(self, max_matches=None):
+        """Get limited data for initial display to prevent UI freezing"""
+        if max_matches is None:
+            max_matches = self.max_initial_matches
+            
+        data = self.get_data()
+        if not data or 'events' not in data:
+            return data
+            
+        # Sort events by priority (live first, then by timestamp)
+        events = data['events']
+        
+        # Separate by status
+        live_events = [e for e in events if e.get('status', {}).get('type') == 'inprogress']
+        finished_events = [e for e in events if e.get('status', {}).get('type') == 'finished']
+        upcoming_events = [e for e in events if e.get('status', {}).get('type') not in ['inprogress', 'finished']]
+        
+        # Sort by timestamp (most recent first for finished, earliest first for upcoming)
+        finished_events.sort(key=lambda x: x.get('startTimestamp', 0), reverse=True)
+        upcoming_events.sort(key=lambda x: x.get('startTimestamp', 0))
+        
+        # Combine with priority: live first, then recent finished, then upcoming
+        limited_events = live_events + finished_events[:max_matches//2] + upcoming_events[:max_matches//2]
+        
+        # Limit total matches
+        limited_events = limited_events[:max_matches]
+        
+        return {
+            'events': limited_events,
+            'total_available': len(events),
+            'showing': len(limited_events)
+        }
+    
+    def is_cache_valid(self):
+        """Check if cached data is still valid"""
+        import time
+        return (self.cached_data is not None and 
+                time.time() - self.last_fetch_time < self.cache_duration)
+    
+    def get_cached_data(self):
+        """Get cached data if valid"""
+        if self.is_cache_valid():
+            return self.cached_data
+        return None
+    
+    def set_cached_data(self, data):
+        """Cache data with timestamp"""
+        import time
+        self.cached_data = data
+        self.last_fetch_time = time.time()
+    
+    def clear_cache(self):
+        """Clear cached data"""
+        self.cached_data = None
+        self.last_fetch_time = 0
 
 
 class MatchOrganizer:

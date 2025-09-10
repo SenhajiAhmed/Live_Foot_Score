@@ -100,6 +100,10 @@ class ContentArea:
         
         # Smooth mousewheel scrolling
         self.canvas.bind_all("<MouseWheel>", self.smooth_scroll)
+        
+        # Setup virtual scrolling for better performance
+        if hasattr(self.match_display, 'setup_virtual_scrolling'):
+            self.match_display.setup_virtual_scrolling(self.canvas)
     
     def show_modern_empty_state(self, message="No matches available", subtitle="Click 'Fetch Matches' to get the latest scores"):
         """Show modern empty state"""
@@ -199,6 +203,10 @@ class ContentArea:
     
     def clear_content(self):
         """Clear all content from the scrollable area"""
+        # Stop any ongoing rendering
+        if self.match_display and hasattr(self.match_display, 'stop_rendering'):
+            self.match_display.stop_rendering()
+        
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
     
@@ -301,7 +309,7 @@ class ContentArea:
         return None
     
     def display_matches(self, data):
-        """Display matches using the match display component"""
+        """Display matches using the match display component with lazy loading"""
         if not self.match_display:
             self.show_modern_empty_state("Error", "Match display component not initialized")
             return
@@ -317,13 +325,56 @@ class ContentArea:
         matches_by_tournament = self.match_organizer.organize_matches_by_tournament(data)
         
         if matches_by_tournament:
+            # Start lazy loading directly without showing loading state
             total_matches = self.match_display.display_tournaments(
                 self.scrollable_frame, 
                 matches_by_tournament
             )
-            print(f"Displayed {total_matches} matches in {self.current_view} view")
+            print(f"Starting lazy loading of {total_matches} matches in {self.current_view} view")
+            
+            # Add load more button if there are more matches available
+            if data.get('total_available', 0) > data.get('showing', 0):
+                self.add_load_more_button(data)
         else:
             self.show_modern_empty_state("No matches found", "Try refreshing the data")
+    
+    
+    def add_load_more_button(self, data):
+        """Add a load more button for additional matches"""
+        load_more_frame = tk.Frame(self.scrollable_frame, bg=self.design.colors['bg_card'])
+        load_more_frame.pack(fill=tk.X, padx=self.design.spacing['xl'], pady=self.design.spacing['lg'])
+        
+        # Load more button
+        load_more_btn = tk.Button(
+            load_more_frame,
+            text=f"Load More Matches ({data.get('total_available', 0) - data.get('showing', 0)} remaining)",
+            font=self.design.fonts['body_medium'],
+            bg=self.design.colors['primary'],
+            fg=self.design.colors['text_white'],
+            bd=0,
+            relief=tk.FLAT,
+            padx=self.design.spacing['lg'],
+            pady=self.design.spacing['md'],
+            cursor='hand2',
+            command=lambda: self.load_more_matches(data)
+        )
+        load_more_btn.pack()
+        
+        # Add hover effect
+        def on_enter(e):
+            load_more_btn.config(bg=self.design.colors.get('primary_hover', self.design.colors['primary']))
+        
+        def on_leave(e):
+            load_more_btn.config(bg=self.design.colors['primary'])
+        
+        load_more_btn.bind('<Enter>', on_enter)
+        load_more_btn.bind('<Leave>', on_leave)
+    
+    def load_more_matches(self, data):
+        """Load more matches when button is clicked"""
+        # This would be implemented to load additional matches
+        # For now, just show a message
+        print("Load more matches functionality would be implemented here")
     
     def show_settings_content(self):
         """Show settings content"""
